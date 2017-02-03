@@ -1,5 +1,6 @@
 #!/bin/bash
-# CLONED AND MODIFIED FROM https://github.com/Alfresco/aws-cis-security-benchmark/commit/1abdfff7acc2a02d6b2af9cff317162120e7a8ef. Remove --region and --profile since this is not required for use with EC2 instance roles.
+# CLONED AND MODIFIED FROM https://github.com/Alfresco/aws-cis-security-benchmark/commit/1abdfff7acc2a02d6b2af9cff317162120e7a8ef. 
+
 # Prowler is a tool that provides automate auditing and hardening guidance of an AWS account.
 # It is based on AWS-CLI commands. It follows guidelines present in the CIS Amazon
 # Web Services Foundations Benchmark at:

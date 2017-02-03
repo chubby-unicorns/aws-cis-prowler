@@ -1,5 +1,15 @@
 # Prowler: AWS CIS Benchmark Tool
-  
+
+## Differences between this and the [original](https://github.com/Alfresco/aws-cis-security-benchmark)
+
+I needed to run this script unattended inside an EC2 instance. As is best practice, we don't use any credentials on-instance - use instance roles instead.
+
+So, the script was modified to strip out `--region` and `--profile` and related sections and output. No functional changes have been made.
+
+_I might spend some time on trying to modify the original script to check if it's running inside an EC2 instance with a role attached, if not, check for the creds and profiles etc. The fact that the script uses `--profile $PROFILE --region $REGION` with almost every command means this would be quite a change. Perhaps use `PROFILE_STRING="--profile $PROFILE"` then replace every `--profile $PROFILE` with `$PROFILE_STRING` and the similar for `--region $REGION`._
+
+The CloudFormation template to launch this can be found in the /unattended/ folder of this repo.
+
 ## Description
 
 Tool based on AWS-CLI commands for AWS account hardening, following guidelines of the [CIS Amazon Web Services Foundations Benchmark 1.1 ](https://benchmarks.cisecurity.org/tools2/amazon/CIS_Amazon_Web_Services_Foundations_Benchmark_v1.1.0.pdf)

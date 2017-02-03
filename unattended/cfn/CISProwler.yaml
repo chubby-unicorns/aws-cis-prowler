@@ -1,0 +1,395 @@
+# NOTES:
+  # 
+
+# VERSION HISTORY
+  # v1.0  - first "live" version
+
+# TO DO:
+  # - send notification at end of run?
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'v1.0: CISProwler Stack. Run Alfreco Prowler in a dedicated and isolated VPC and output to standard S3 Bucket'
+Parameters: 
+# VPC PARAMETERS
+  # SSHLocation:
+  #   Description: The IP address range that can be used to SSH to the CISProwler Instances
+  #   Type: String
+  #   MinLength: '9'
+  #   MaxLength: '18'
+  #   Default: 0.0.0.0/0
+  #   AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+  #   ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  VPCName:
+    Description: 'Give the VPC a name (e.g. ggHub or ggPortalTest etc)'
+    Type: String
+    MinLength: 4
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
+    Default: CISProwler
+  VPCCidrIP:
+    Description: 'CIDR IP address of the VPC'
+    Type: String
+    Default: '192.168.168.192/28'
+    ConstraintDescription: 'must be a valid CIDR IP address of the form x.x.x.x/x'
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+# SUBNETS Availability Zone A
+ # PUBLIC SUBNETS Availability Zone A
+  CISProwlerSubnetLabel:
+    Type: String
+    Default: CISProwlerSubnet
+    MinLength: 4
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: 'label must be alphanumeric (a-zA-Z0-9)'
+  CISProwlerSubnetCidr:
+    Type: String
+    Description: CIDR IP address of the CISProwler Subnet
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    MinLength: 7
+    MaxLength: 18
+    ConstraintDescription: 'must be a valid CIDR IP address of the form x.x.x.x/x'
+    Default: '192.168.168.192/28'
+  # KeyPair: # comment out in final version (no access)
+  #   Description: Amazon EC2 Key Pair
+  #   Type: "AWS::EC2::KeyPair::KeyName"
+  InstanceRole: 
+    Description: Name of instance role to assume
+    Type: "String"
+    Default: "CISProwlerInstanceRole"
+  DesiredCount: 
+    Description: Set DesiredCapacity to 1 or 0
+    Type: "String"
+    Default: "1"
+    AllowedValues:
+    - "0"
+    - "1"
+  MaxCount: 
+    Description: Set MaxSize to 1 or 2
+    Type: "String"
+    Default: "1"
+    AllowedValues:
+    - "1"
+  MinCount: 
+    Description: Set MinSize to 0 (allow for scaling to 0 at night)
+    Type: "String"
+    Default: "0"
+    AllowedValues:
+    - "0"
+  InstanceTypePrivate:
+      Description: EC2 instance type
+      Type: String
+      Default: t2.micro
+      AllowedValues:
+          - t2.nano
+          - t2.micro
+      ConstraintDescription: must be a valid EC2 instance type.
+Mappings:
+  AWSInstanceType2Arch:
+    t2.nano:
+        Arch: HVM64
+    t2.micro:
+        Arch: HVM64
+  AWSRegionArch2AMIPrivate:
+    us-east-1:
+        HVM64: ami-6869aa05
+    us-west-2:
+        HVM64: ami-7172b611
+    us-west-1:
+        HVM64: ami-31490d51
+    eu-west-1:
+        HVM64: ami-f9dd458a
+    eu-west-2:
+        HVM64: ami-886369ec
+    eu-central-1:
+        HVM64: ami-ea26ce85
+    ap-northeast-1:
+        HVM64: ami-374db956
+    ap-northeast-2:
+        HVM64: ami-2b408b45
+    ap-southeast-1:
+        HVM64: ami-a59b49c6
+    ap-southeast-2:
+        HVM64: ami-dc361ebf
+    ap-south-1:
+        HVM64: ami-ffbdd790
+    us-east-2:
+        HVM64: ami-f6035893
+    ca-central-1:
+        HVM64: ami-730ebd17
+    sa-east-1:
+        HVM64: ami-6dd04501
+    cn-north-1:
+        HVM64: ami-8e6aa0e3
+Resources:
+# SUBNETS
+  CISProwlerSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref CISProwlerSubnetCidr
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub 'SN-${VPCName}-${CISProwlerSubnetLabel}'
+# INTERNET GATEWAY
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub 'IGW-${VPCName}'
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+# ROUTING: PUBLIC
+  RouteTablePublic:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub 'RTB-${VPCName}-Public'
+  RouteTableAssociationCISProwlerSubnet:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref CISProwlerSubnet
+      RouteTableId: !Ref RouteTablePublic
+  RouteTablePublicInternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTablePublic
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+# NETWORK ACLS
+  NetworkAclPublic:
+    Type: 'AWS::EC2::NetworkAcl'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub 'NACL-${VPCName}-Public'
+  SubnetNetworkAclAssociationCISProwlerSubnet:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref CISProwlerSubnet
+      NetworkAclId: !Ref NetworkAclPublic
+  NetworkAclEntryInPublicAllowAll:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAclPublic
+      RuleNumber: 99
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+  NetworkAclEntryOutPublicAllowAll:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAclPublic
+      RuleNumber: 99
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+# VPC FLOWLOGS
+  RoleFlowLogs: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement:
+          - 
+            Effect: 'Allow'
+            Principal:
+              Service: 
+                -  'vpc-flow-logs.amazonaws.com'
+            Action: 
+              - 'sts:AssumeRole'
+      Path: '/'
+      RoleName: 'RoleFlowLogsCISProwler'
+  PolicyFlowLogs:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: VPCFlowLogsPolicyCISProwler
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement: 
+          -
+            Effect: Allow
+            Action: 
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+            Resource: '*'
+      Roles:
+        - 
+          Ref: RoleFlowLogs
+  VPCFlowLogsLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties: 
+      LogGroupName: 'SecurityVPCFlowLogGroup'
+      RetentionInDays: 14
+  VPCFlowLog: 
+    Type: 'AWS::EC2::FlowLog'
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt RoleFlowLogs.Arn
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: 'VPC'
+      TrafficType: 'ALL' 
+# VPC
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VPCCidrIP
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: !Sub 'VPC-${VPCName}'
+# SECURITY GROUPS
+  SecurityGroupCISProwler:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTPS out and SSH in
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      VpcId:
+          Ref: VPC
+      # SecurityGroupIngress:
+      # - IpProtocol: tcp
+      #   FromPort: '22'
+      #   ToPort: '22'
+      #   CidrIp:
+      #     Ref: SSHLocation
+      VpcId:
+          Ref: VPC
+# AUTOSCALING
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      InstanceType: !Ref InstanceTypePrivate 
+      ImageId: 
+        'Fn::FindInMap':
+            - AWSRegionArch2AMIPrivate
+            - 
+                Ref: 'AWS::Region'
+            - 
+                'Fn::FindInMap':
+                    - AWSInstanceType2Arch
+                    - 
+                        Ref: InstanceTypePrivate
+                    - Arch
+      SecurityGroups: 
+        - Ref: SecurityGroupCISProwler
+      # KeyName: !Ref KeyPair # comment out with final version (no access)
+      IamInstanceProfile: 
+          Ref: ProwlerInstanceProfile
+      UserData:   
+        Fn::Base64: !Sub |
+          #!/bin/bash -v
+          ## UPDATES AND PACKAGE INSTALLATION
+          yum -yq update
+          yum -yq install awslogs git jq
+          export EC2_AVAIL_ZONE=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone`
+          export AWS_DEFAULT_REGION=`echo $EC2_AVAIL_ZONE | sed 's/[a-z]$//'`
+          ## CIS PROWLER ##
+          export TIMESTAMP=$(date +"%Y%m%d%H%M")
+          export ACCOUNT_ID=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r ".accountId")
+          export ACCOUNT_ALIAS=$(aws iam list-account-aliases --out json | jq -r ".AccountAliases[]")
+          export OUTBUCKET=$ACCOUNT_ID-cisprowler-output
+          ## CHECK FOR BUCKET; IF NOT EXIST, CREATE IT
+          TEST_S3=$(aws s3 ls | grep $OUTBUCKET)
+          if [ "$TEST_S3" = "" ]; then aws s3 mb s3://$OUTBUCKET; fi
+          export GIT_ACCOUNT=yurasuka
+          export PROWLER_REPO_NAME=aws-cis-prowler; export PROWLER_REPO=https://github.com/$GIT_ACCOUNT/$PROWLER_REPO_NAME.git
+          export OUTPUT_FILENAME=$PROWLER_REPO_NAME-$ACCOUNT_ID-$ACCOUNT_ALIAS-$TIMESTAMP.log
+          ## LAUNCH PROWLER
+          cd /tmp;rm -rf aws-cis*; git clone $PROWLER_REPO;cd $PROWLER_REPO_NAME;echo "Launching CIS prowler...";./prowler > $OUTPUT_FILENAME 2>&1
+          aws s3 cp $OUTPUT_FILENAME s3://$OUTBUCKET/$OUTPUT_FILENAME
+          ASG=$(aws autoscaling describe-auto-scaling-groups --region $AWS_DEFAULT_REGION --query "AutoScalingGroups[].AutoScalingGroupName" --out text)
+          aws autoscaling set-desired-capacity --auto-scaling-group-name $ASG --desired-capacity 0
+  AutoScalingGroup: 
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Properties: 
+      VPCZoneIdentifier:
+        - Ref: CISProwlerSubnet
+      LaunchConfigurationName: 
+        Ref: LaunchConfig
+      MinSize: 
+        Ref: MinCount
+      MaxSize: 
+        Ref: MaxCount
+      DesiredCapacity: 
+        Ref: DesiredCount
+      Cooldown: 120
+      HealthCheckGracePeriod: 120
+      Tags: 
+        - 
+          Key: Name
+          Value: CISProwler
+          PropagateAtLaunch: "true"       
+  ProwlerRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/SecurityAudit
+      Policies: 
+        - 
+          PolicyName: "ProwlerRolePolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: Allow
+                Action: s3:ListAllMyBuckets
+                Resource: arn:aws:s3:::*
+              - 
+                Effect: Allow
+                Action: s3:CreateBucket
+                Resource: '*'
+              - 
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${AWS::AccountId}-cisprowler-output/*'
+              - 
+                Effect: Allow
+                Action: autoscaling:SetDesiredCapacity
+                Resource: '*'
+              - 
+                Effect: Allow
+                Action: iam:ListAccountAliases
+                Resource: '*'
+
+  ProwlerInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - 
+          Ref: "ProwlerRole"
