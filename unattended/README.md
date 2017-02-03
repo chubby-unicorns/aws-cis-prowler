@@ -2,11 +2,9 @@
 
 Based on [Alfresco Prowler: AWS CIS Benchmark Tool](https://github.com/Alfresco/aws-cis-security-benchmark), but customised to run unattended.
 
-`v1.0`
-This is a cloudformation template that creates an ASG with a single instance which downloads and runs the prowler script against the account it's running in. An S3 bucket is created (if not existing already) and the script output is copied there, timestamped filename.
+`v1.0` - This is a cloudformation template that creates an ASG with a single instance which downloads and runs the prowler script against the account it's running in. An S3 bucket is created (if not existing already) and the script output is copied there, timestamped filename.
 
-`v1.1`
-Fixing [permissions issue](https://github.com/yurasuka/aws-cis-prowler/issues/3).
+`v1.1` - Fixing [permissions issue](https://github.com/yurasuka/aws-cis-prowler/issues/3).
 
 The bootstrapping ends with the ASGs DesiredCount being set to 0, which terminates the instance. You can set a schedule to set the DesiredCount to 1 e.g. weekly.
 
