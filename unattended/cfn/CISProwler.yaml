@@ -3,12 +3,14 @@
 
 # VERSION HISTORY
   # v1.0  - first "live" version
+  # v1.1  - fix https://github.com/yurasuka/aws-cis-prowler/issues/3 - custom policy
 
 # TO DO:
+  # - pass parameters to the userdata script: either full prowler url or reponame and git username
   # - send notification at end of run?
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'v1.0: CISProwler Stack. Run Alfreco Prowler in a dedicated and isolated VPC and output to standard S3 Bucket'
+Description: 'v1.1: CISProwler Stack. Run Alfreco Prowler in a dedicated and isolated VPC and output to standard S3 Bucket'
 Parameters: 
 # VPC PARAMETERS
   # SSHLocation:
@@ -52,10 +54,6 @@ Parameters:
   # KeyPair: # comment out in final version (no access)
   #   Description: Amazon EC2 Key Pair
   #   Type: "AWS::EC2::KeyPair::KeyName"
-  InstanceRole: 
-    Description: Name of instance role to assume
-    Type: "String"
-    Default: "CISProwlerInstanceRole"
   DesiredCount: 
     Description: Set DesiredCapacity to 1 or 0
     Type: "String"
@@ -357,18 +355,12 @@ Resources:
             Action: 
               - "sts:AssumeRole"
       Path: "/"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/SecurityAudit
       Policies: 
         - 
           PolicyName: "ProwlerRolePolicy"
           PolicyDocument: 
             Version: "2012-10-17"
             Statement: 
-              - 
-                Effect: Allow
-                Action: s3:ListAllMyBuckets
-                Resource: arn:aws:s3:::*
               - 
                 Effect: Allow
                 Action: s3:CreateBucket
@@ -383,9 +375,110 @@ Resources:
                 Resource: '*'
               - 
                 Effect: Allow
-                Action: iam:ListAccountAliases
+                Action:
+                  - 'acm:describecertificate'
+                  - 'acm:listcertificates'
+                  - 'autoscaling:describe*'
+                  - 'cloudformation:describestack*'
+                  - 'cloudformation:getstackpolicy'
+                  - 'cloudformation:gettemplate'
+                  - 'cloudformation:liststack*'
+                  - 'cloudfront:get*'
+                  - 'cloudfront:list*'
+                  - 'cloudtrail:describetrails'
+                  - 'cloudtrail:gettrailstatus'
+                  - 'cloudtrail:listtags'
+                  - 'cloudwatch:describe*'
+                  - 'cloudwatchlogs:describeloggroups'
+                  - 'cloudwatchlogs:describemetricfilters'
+                  - 'codecommit:batchgetrepositories'
+                  - 'codecommit:getbranch'
+                  - 'codecommit:getobjectidentifier'
+                  - 'codecommit:getrepository'
+                  - 'codecommit:list*'
+                  - 'codedeploy:batch*'
+                  - 'codedeploy:get*'
+                  - 'codedeploy:list*'
+                  - 'config:deliver*'
+                  - 'config:describe*'
+                  - 'config:get*'
+                  - 'datapipeline:describeobjects'
+                  - 'datapipeline:describepipelines'
+                  - 'datapipeline:evaluateexpression'
+                  - 'datapipeline:getpipelinedefinition'
+                  - 'datapipeline:listpipelines'
+                  - 'datapipeline:queryobjects'
+                  - 'datapipeline:validatepipelinedefinition'
+                  - 'directconnect:describe*'
+                  - 'dynamodb:listtables'
+                  - 'ec2:describe*'
+                  - 'ecs:describe*'
+                  - 'ecs:list*'
+                  - 'elasticache:describe*'
+                  - 'elasticbeanstalk:describe*'
+                  - 'elasticloadbalancing:describe*'
+                  - 'elasticmapreduce:describejobflows'
+                  - 'elasticmapreduce:listclusters'
+                  - 'es:describeelasticsearchdomainconfig'
+                  - 'es:listdomainnames'
+                  - 'firehose:describe*'
+                  - 'firehose:list*'
+                  - 'glacier:listvaults'
+                  - 'iam:generatecredentialreport'
+                  - 'iam:get*'
+                  - 'iam:list*'
+                  - 'kms:describe*'
+                  - 'kms:get*'
+                  - 'kms:list*'
+                  - 'lambda:getpolicy'
+                  - 'lambda:listfunctions'
+                  - 'logs:DescribeMetricFilters'
+                  - 'rds:describe*'
+                  - 'rds:downloaddblogfileportion'
+                  - 'rds:listtagsforresource'
+                  - 'redshift:describe*'
+                  - 'route53:getchange'
+                  - 'route53:getcheckeripranges'
+                  - 'route53:getgeolocations'
+                  - 'route53:gethealthcheck'
+                  - 'route53:gethealthcheckcount'
+                  - 'route53:gethealthchecklastfailurereason'
+                  - 'route53:gethostedzone'
+                  - 'route53:gethostedzonecount'
+                  - 'route53:getreusabledelegationset'
+                  - 'route53:listgeolocations'
+                  - 'route53:listhealthchecks'
+                  - 'route53:listhostedzones'
+                  - 'route53:listhostedzonesbyname'
+                  - 'route53:listresourcerecordsets'
+                  - 'route53:listreusabledelegationsets'
+                  - 'route53:listtagsforresource'
+                  - 'route53:listtagsforresources'
+                  - 'route53domains:getdomaindetail'
+                  - 'route53domains:getoperationdetail'
+                  - 'route53domains:listdomains'
+                  - 'route53domains:listoperations'
+                  - 'route53domains:listtagsfordomain'
+                  - 's3:getbucket*'
+                  - 's3:getlifecycleconfiguration'
+                  - 's3:getobjectacl'
+                  - 's3:getobjectversionacl'
+                  - 's3:listallmybuckets'
+                  - 'sdb:domainmetadata'
+                  - 'sdb:listdomains'
+                  - 'ses:getidentitydkimattributes'
+                  - 'ses:getidentityverificationattributes'
+                  - 'ses:listidentities'
+                  - 'ses:listverifiedemailaddresses'
+                  - 'ses:sendemail'
+                  - 'sns:gettopicattributes'
+                  - 'sns:listsubscriptionsbytopic'
+                  - 'sns:listtopics'
+                  - 'sqs:getqueueattributes'
+                  - 'sqs:listqueues'
+                  - 'tag:getresources'
+                  - 'tag:gettagkeys'
                 Resource: '*'
-
   ProwlerInstanceProfile: 
     Type: "AWS::IAM::InstanceProfile"
     Properties: 
